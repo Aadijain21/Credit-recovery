@@ -1,6 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 
+const analysisRoutes = require("./routes/analysis");
+
 const app = express();
 
 app.use(cors());
@@ -12,6 +14,16 @@ app.get("/", (req, res) => {
     });
 });
 
-app.listen(5000, () => {
-    console.log("Server running on port 5000");
+app.get("/api/health", (req, res) => {
+    res.json({
+        status: "OK"
+    });
+});
+
+app.use("/api/analyze", analysisRoutes);
+
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });
