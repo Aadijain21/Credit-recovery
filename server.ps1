@@ -50,20 +50,25 @@ while ($listener.IsListening) {
 
             $response.ContentType = $contentType
             $response.AddHeader("Access-Control-Allow-Origin", "*")
-            $response.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            $response.AddHeader("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS")
             $response.AddHeader("Access-Control-Allow-Headers", "*")
 
             $bytes = [System.IO.File]::ReadAllBytes($filePath)
             $response.ContentLength64 = $bytes.Length
-            $response.OutputStream.Write($bytes, 0, $bytes.Length)
-            $response.Close()
+
+            if ($request.HttpMethod -ne "HEAD") {
+                $response.OutputStream.Write($bytes, 0, $bytes.Length)
+            }
+            $response.OutputStream.Close()
         } else {
             $response.StatusCode = 404
             $msg = [System.Text.Encoding]::UTF8.GetBytes("404 Not Found: $path")
             $response.ContentType = "text/plain; charset=utf-8"
             $response.ContentLength64 = $msg.Length
-            $response.OutputStream.Write($msg, 0, $msg.Length)
-            $response.Close()
+            if ($request.HttpMethod -ne "HEAD") {
+                $response.OutputStream.Write($msg, 0, $msg.Length)
+            }
+            $response.OutputStream.Close()
         }
     } catch {
         Write-Host "Request error: $_"

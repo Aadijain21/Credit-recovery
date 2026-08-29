@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CIBIL Score & Recovery — Credit Recovery</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header class="app-header">
+        <a href="dashboard.html" class="logo">💳 Credit Recovery</a>
+        <div class="header-tagline">Credit Health Analysis & Recovery Roadmap</div>
+    </header>
+
+    <nav class="app-navbar">
+        <ul class="nav-links">
+            <li><a href="dashboard.html" class="nav-link">Dashboard</a></li>
+            <li><a href="cards.html" class="nav-link">Credit Cards</a></li>
+            <li><a href="loans.html" class="nav-link">Loans</a></li>
+            <li><a href="cibil.html" class="nav-link active">CIBIL & Recovery</a></li>
+            <li><a href="index.html" class="nav-link">Switch Profile</a></li>
+        </ul>
+        <div class="nav-user" id="navUserName">👤 Loading...</div>
+    </nav>
+
+    <main class="page-container">
+        <div class="page-header">
+            <h1>📊 CIBIL Score & Recovery Plan</h1>
+            <p>Analyze key credit risk factors, get tailored recommendations, and execute your 3-month recovery roadmap.</p>
+        </div>
+
+        <div class="form-container">
+            <h2>Enter / Update Credit Information</h2>
+
+            <label for="name">Name</label>
+            <input type="text" id="name" placeholder="Enter your name">
+
+            <label for="creditScore">CIBIL Score (300 - 900)</label>
+            <input type="number" id="creditScore" placeholder="300 - 900">
+
+            <label for="income">Monthly Income (₹)</label>
+            <input type="number" id="income" placeholder="Example: 30000">
+
+            <label for="creditLimit">Total Credit Limit (₹)</label>
+            <input type="number" id="creditLimit" placeholder="Example: 100000">
+
+            <label for="outstandingBalance">Outstanding Credit Card Balance (₹)</label>
+            <input type="number" id="outstandingBalance" placeholder="Example: 70000">
+
+            <label for="latePayments">Late Payments</label>
+            <input type="number" id="latePayments" placeholder="Example: 2">
+
+            <label for="activeLoans">Active Loans</label>
+            <input type="number" id="activeLoans" placeholder="Example: 2">
+
+            <label for="recentInquiries">Recent Credit Inquiries</label>
+            <input type="number" id="recentInquiries" placeholder="Example: 3">
+
+            <button id="analyzeBtn">Analyze My Credit</button>
+
+            <!-- Results Container -->
+            <div id="result"></div>
+
+            <!-- Recovery Plan Container -->
+            <div id="recoveryPlan"></div>
+
+            <!-- 3-Month Roadmap Container -->
+            <div id="roadmap"></div>
+
+            <!-- Live Progress Section Container -->
+            <div id="progressSection"></div>
+        </div>
+    </main>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>

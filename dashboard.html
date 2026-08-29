@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — Credit Recovery</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header class="app-header">
+        <a href="dashboard.html" class="logo">💳 Credit Recovery</a>
+        <div class="header-tagline">Credit Health & Recovery Dashboard</div>
+    </header>
+
+    <nav class="app-navbar">
+        <ul class="nav-links">
+            <li><a href="dashboard.html" class="nav-link active">Dashboard</a></li>
+            <li><a href="cards.html" class="nav-link">Credit Cards</a></li>
+            <li><a href="loans.html" class="nav-link">Loans</a></li>
+            <li><a href="cibil.html" class="nav-link">CIBIL & Recovery</a></li>
+            <li><a href="index.html" class="nav-link">Switch Profile</a></li>
+        </ul>
+        <div class="nav-user" id="navUserName">👤 Loading...</div>
+    </nav>
+
+    <main class="page-container">
+        <div class="page-header">
+            <h1 id="welcomeGreeting">Welcome back!</h1>
+            <p>Here is an overview of your current credit standing and recovery indicators.</p>
+        </div>
+
+        <!-- Key High-Level Scores Grid -->
+        <div class="dashboard-grid">
+            <div class="metric-card">
+                <div class="metric-label">CIBIL Score</div>
+                <div class="metric-value" id="dispCibilScore">680</div>
+                <div class="metric-sub">
+                    <span class="badge badge-warning" id="cibilBadge">Fair</span> (Range: 300 - 900)
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">Credit Health Score</div>
+                <div class="metric-value" id="dispHealthScore">65 / 100</div>
+                <div class="metric-sub">
+                    <span class="badge badge-good" id="healthBadge">Good</span> (Proprietary Recovery Index)
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">Overall Credit Utilization</div>
+                <div class="metric-value" id="dispUtilization">54.2%</div>
+                <div class="metric-sub">
+                    <span class="badge badge-danger">High (&gt;30% Recommended)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Secondary Indicators Grid -->
+        <div class="dashboard-grid">
+            <div class="metric-card">
+                <div class="metric-label">Credit Cards</div>
+                <div class="metric-value" id="dispCardCount">2</div>
+                <div class="metric-sub">Total Limit: ₹1,20,000</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">Active Loans</div>
+                <div class="metric-value" id="dispLoanCount">2</div>
+                <div class="metric-sub">Total Debt: ₹1,77,000</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">Late Payments</div>
+                <div class="metric-value" id="dispLatePayments">1</div>
+                <div class="metric-sub">Needs Attention</div>
+            </div>
+        </div>
+
+        <!-- Action Cards & Page Navigation -->
+        <h2>🚀 Manage & Recover</h2>
+        <div class="action-grid">
+            <div class="action-card">
+                <div>
+                    <h3>💳 Credit Cards</h3>
+                    <p>Review your active credit cards, card limits, outstanding balances, and utilization levels.</p>
+                </div>
+                <a href="cards.html" class="btn">View Credit Cards →</a>
+            </div>
+
+            <div class="action-card">
+                <div>
+                    <h3>📊 CIBIL Score & Recovery</h3>
+                    <p>Analyze health factors, view prioritized recommendations, and follow your 3-month action roadmap.</p>
+                </div>
+                <a href="cibil.html" class="btn">Analyze & Recover →</a>
+            </div>
+
+            <div class="action-card">
+                <div>
+                    <h3>🏦 Active Loans</h3>
+                    <p>Track your active personal and auto loans, monthly EMIs, and outstanding principal balances.</p>
+                </div>
+                <a href="loans.html" class="btn">View Loans →</a>
+            </div>
+        </div>
+    </main>
+
+    <script type="module">
+        import { getProfile } from "./creditData.js";
+
+        const profile = getProfile();
+
+        // Update welcome message
+        const welcomeGreeting = document.getElementById("welcomeGreeting");
+        const navUserName = document.getElementById("navUserName");
+        if (profile.name) {
+            welcomeGreeting.textContent = `Welcome back, ${profile.name}!`;
+            navUserName.textContent = `👤 ${profile.name}`;
+        }
+
+        // Compute utilization
+        const utilization = ((profile.outstandingBalance / profile.creditLimit) * 100).toFixed(1);
+
+        document.getElementById("dispCibilScore").textContent = profile.creditScore || 680;
+        document.getElementById("dispUtilization").textContent = `${utilization}%`;
+        document.getElementById("dispCardCount").textContent = profile.cards ? profile.cards.length : 2;
+        document.getElementById("dispLoanCount").textContent = profile.activeLoans || 2;
+        document.getElementById("dispLatePayments").textContent = profile.latePayments || 0;
+    </script>
+</body>
+</html>

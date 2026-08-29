@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Active Loans — Credit Recovery</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header class="app-header">
+        <a href="dashboard.html" class="logo">💳 Credit Recovery</a>
+        <div class="header-tagline">Loan Liabilities & EMI Overview</div>
+    </header>
+
+    <nav class="app-navbar">
+        <ul class="nav-links">
+            <li><a href="dashboard.html" class="nav-link">Dashboard</a></li>
+            <li><a href="cards.html" class="nav-link">Credit Cards</a></li>
+            <li><a href="loans.html" class="nav-link active">Loans</a></li>
+            <li><a href="cibil.html" class="nav-link">CIBIL & Recovery</a></li>
+            <li><a href="index.html" class="nav-link">Switch Profile</a></li>
+        </ul>
+        <div class="nav-user" id="navUserName">👤 Loading...</div>
+    </nav>
+
+    <main class="page-container">
+        <div class="page-header">
+            <h1>🏦 Active Loans</h1>
+            <p>Track your active installment loans, remaining tenures, and monthly obligations.</p>
+        </div>
+
+        <!-- Loans Summary Row -->
+        <div class="dashboard-grid">
+            <div class="metric-card">
+                <div class="metric-label">Active Loans</div>
+                <div class="metric-value" id="loanCountDisplay">2</div>
+                <div class="metric-sub">Open credit facilities</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">Total Outstanding Debt</div>
+                <div class="metric-value" id="totalDebtDisplay">₹1,77,000</div>
+                <div class="metric-sub">Remaining principal</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">Total Monthly EMI</div>
+                <div class="metric-value" id="totalEmiDisplay">₹11,900</div>
+                <div class="metric-sub">
+                    <span class="badge badge-good">Paid On-Time</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loans List -->
+        <h2>Active Loan Accounts</h2>
+        <div class="items-list" id="loansListContainer">
+            <!-- Dynamic loans rendered here -->
+        </div>
+
+        <div style="margin-top: 30px; text-align: center;">
+            <p style="color: #64748b;">Managing multiple loans? Check your customized repayment strategy:</p>
+            <a href="cibil.html" class="btn btn-secondary" style="display: inline-block; width: auto;">View Recovery Plan & Roadmap →</a>
+        </div>
+    </main>
+
+    <script type="module">
+        import { getProfile } from "./creditData.js";
+
+        const profile = getProfile();
+        if (profile.name) {
+            document.getElementById("navUserName").textContent = `👤 ${profile.name}`;
+        }
+
+        const loans = profile.loans || [];
+        let totalDebt = 0;
+        let totalEmi = 0;
+
+        loans.forEach(l => {
+            totalDebt += l.outstanding;
+            totalEmi += l.emi;
+        });
+
+        document.getElementById("loanCountDisplay").textContent = loans.length;
+        document.getElementById("totalDebtDisplay").textContent = `₹${totalDebt.toLocaleString('en-IN')}`;
+        document.getElementById("totalEmiDisplay").textContent = `₹${totalEmi.toLocaleString('en-IN')}`;
+
+        const container = document.getElementById("loansListContainer");
+        container.innerHTML = loans.map((loan) => {
+            return `
+                <div class="loan-item">
+                    <div class="loan-item-header">
+                        <div>
+                            <div class="item-title">${loan.name} — ${loan.lender}</div>
+                            <small style="color: #64748b;">Account No: ${loan.loanNumber}</small>
+                        </div>
+                        <div>
+                            <span class="badge badge-good">${loan.status}</span>
+                        </div>
+                    </div>
+
+                    <div class="item-grid">
+                        <div class="item-field">
+                            Original Principal
+                            <strong>₹${loan.principal.toLocaleString('en-IN')}</strong>
+                        </div>
+                        <div class="item-field">
+                            Outstanding Balance
+                            <strong>₹${loan.outstanding.toLocaleString('en-IN')}</strong>
+                        </div>
+                        <div class="item-field">
+                            Monthly EMI
+                            <strong>₹${loan.emi.toLocaleString('en-IN')}/mo</strong>
+                        </div>
+                        <div class="item-field">
+                            Remaining Tenure
+                            <strong>${loan.remainingMonths} of ${loan.tenureMonths} mos</strong>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-secondary btn-sm" style="margin-top: 15px;" onclick="toggleDetails('loan-details-${loan.id}')">
+                        View Loan Summary
+                    </button>
+
+                    <div class="details-box" id="loan-details-${loan.id}">
+                        <strong>Loan Details:</strong><br>
+                        • Lender: ${loan.lender}<br>
+                        • Next Due Date: 5th of next month<br>
+                        • Status: Active, in regular repayment schedule.
+                    </div>
+                </div>
+            `;
+        }).join("");
+
+        window.toggleDetails = function(id) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.style.display = el.style.display === "block" ? "none" : "block";
+            }
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Credit Cards — Credit Recovery</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header class="app-header">
+        <a href="dashboard.html" class="logo">💳 Credit Recovery</a>
+        <div class="header-tagline">Credit Card Portfolio & Utilization</div>
+    </header>
+
+    <nav class="app-navbar">
+        <ul class="nav-links">
+            <li><a href="dashboard.html" class="nav-link">Dashboard</a></li>
+            <li><a href="cards.html" class="nav-link active">Credit Cards</a></li>
+            <li><a href="loans.html" class="nav-link">Loans</a></li>
+            <li><a href="cibil.html" class="nav-link">CIBIL & Recovery</a></li>
+            <li><a href="index.html" class="nav-link">Switch Profile</a></li>
+        </ul>
+        <div class="nav-user" id="navUserName">👤 Loading...</div>
+    </nav>
+
+    <main class="page-container">
+        <div class="page-header">
+            <h1>💳 Your Credit Cards</h1>
+            <p>Monitor limits, balances, and utilization across your active credit cards.</p>
+        </div>
+
+        <!-- Overall Summary Row -->
+        <div class="dashboard-grid">
+            <div class="metric-card">
+                <div class="metric-label">Total Credit Limit</div>
+                <div class="metric-value" id="totalLimitDisplay">₹1,20,000</div>
+                <div class="metric-sub">Across all cards</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">Total Outstanding Balance</div>
+                <div class="metric-value" id="totalBalanceDisplay">₹65,000</div>
+                <div class="metric-sub">Due next cycle</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">Average Utilization</div>
+                <div class="metric-value" id="totalUtilizationDisplay">54.2%</div>
+                <div class="metric-sub">
+                    <span class="badge badge-warning">Target: &lt; 30%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cards List -->
+        <h2>Active Credit Cards</h2>
+        <div class="items-list" id="cardsListContainer">
+            <!-- Dynamic cards rendered here -->
+        </div>
+
+        <div style="margin-top: 30px; text-align: center;">
+            <p style="color: #64748b;">Need to lower your credit card utilization below 30%?</p>
+            <a href="cibil.html" class="btn btn-secondary" style="display: inline-block; width: auto;">Go to 3-Month Recovery Plan →</a>
+        </div>
+    </main>
+
+    <script type="module">
+        import { getProfile } from "./creditData.js";
+
+        const profile = getProfile();
+        if (profile.name) {
+            document.getElementById("navUserName").textContent = `👤 ${profile.name}`;
+        }
+
+        const cards = profile.cards || [];
+        let totalLimit = 0;
+        let totalBalance = 0;
+
+        cards.forEach(c => {
+            totalLimit += c.limit;
+            totalBalance += c.outstanding;
+        });
+
+        const overallUtil = totalLimit > 0 ? ((totalBalance / totalLimit) * 100).toFixed(1) : 0;
+        document.getElementById("totalLimitDisplay").textContent = `₹${totalLimit.toLocaleString('en-IN')}`;
+        document.getElementById("totalBalanceDisplay").textContent = `₹${totalBalance.toLocaleString('en-IN')}`;
+        document.getElementById("totalUtilizationDisplay").textContent = `${overallUtil}%`;
+
+        const container = document.getElementById("cardsListContainer");
+        container.innerHTML = cards.map((card, idx) => {
+            const cardUtil = ((card.outstanding / card.limit) * 100).toFixed(1);
+            const badgeClass = cardUtil > 50 ? 'badge-danger' : (cardUtil > 30 ? 'badge-warning' : 'badge-good');
+
+            return `
+                <div class="card-item">
+                    <div class="card-item-header">
+                        <div>
+                            <div class="item-title">${card.name}</div>
+                            <small style="color: #64748b;">${card.bank} | ${card.cardNumber}</small>
+                        </div>
+                        <div>
+                            <span class="badge ${badgeClass}">${cardUtil}% Utilized</span>
+                        </div>
+                    </div>
+
+                    <div class="item-grid">
+                        <div class="item-field">
+                            Credit Limit
+                            <strong>₹${card.limit.toLocaleString('en-IN')}</strong>
+                        </div>
+                        <div class="item-field">
+                            Outstanding Balance
+                            <strong>₹${card.outstanding.toLocaleString('en-IN')}</strong>
+                        </div>
+                        <div class="item-field">
+                            Available Limit
+                            <strong>₹${(card.limit - card.outstanding).toLocaleString('en-IN')}</strong>
+                        </div>
+                        <div class="item-field">
+                            Payment Due Date
+                            <strong>${card.dueDate}</strong>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-secondary btn-sm" style="margin-top: 15px;" onclick="toggleDetails('details-${card.id}')">
+                        View Details
+                    </button>
+
+                    <div class="details-box" id="details-${card.id}">
+                        <strong>Card Details:</strong><br>
+                        • Status: ${card.status}<br>
+                        • Billing Cycle: 1st to 30th of month<br>
+                        • Recommendation: Pay ₹${Math.max(0, card.outstanding - (card.limit * 0.3)).toLocaleString('en-IN')} to bring utilization below 30%.
+                    </div>
+                </div>
+            `;
+        }).join("");
+
+        window.toggleDetails = function(id) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.style.display = el.style.display === "block" ? "none" : "block";
+            }
+        };
+    </script>
+</body>
+</html>
