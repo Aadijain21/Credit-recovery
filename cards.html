@@ -28,27 +28,28 @@
         <div class="page-header">
             <h1>💳 Your Credit Cards</h1>
             <p>Monitor limits, balances, and utilization across your active credit cards.</p>
+            <div id="dataSourceBadge" style="margin-top:6px;font-size:0.8rem;color:#64748b;"></div>
         </div>
 
         <!-- Overall Summary Row -->
         <div class="dashboard-grid">
             <div class="metric-card">
                 <div class="metric-label">Total Credit Limit</div>
-                <div class="metric-value" id="totalLimitDisplay">₹1,20,000</div>
+                <div class="metric-value" id="totalLimitDisplay">₹—</div>
                 <div class="metric-sub">Across all cards</div>
             </div>
 
             <div class="metric-card">
                 <div class="metric-label">Total Outstanding Balance</div>
-                <div class="metric-value" id="totalBalanceDisplay">₹65,000</div>
+                <div class="metric-value" id="totalBalanceDisplay">₹—</div>
                 <div class="metric-sub">Due next cycle</div>
             </div>
 
             <div class="metric-card">
                 <div class="metric-label">Average Utilization</div>
-                <div class="metric-value" id="totalUtilizationDisplay">54.2%</div>
+                <div class="metric-value" id="totalUtilizationDisplay">—%</div>
                 <div class="metric-sub">
-                    <span class="badge badge-warning">Target: &lt; 30%</span>
+                    <span class="badge badge-warning" id="utilizationBadge">Target: &lt; 30%</span>
                 </div>
             </div>
         </div>
@@ -56,7 +57,7 @@
         <!-- Cards List -->
         <h2>Active Credit Cards</h2>
         <div class="items-list" id="cardsListContainer">
-            <!-- Dynamic cards rendered here -->
+            <p style="color:#64748b;">Loading card data...</p>
         </div>
 
         <div style="margin-top: 30px; text-align: center;">
@@ -66,83 +67,184 @@
     </main>
 
     <script type="module">
-        import { getProfile } from "./creditData.js";
+        import { getProfile, getProfileId, getCardsAPI } from "./creditData.js";
 
-        const profile = getProfile();
-        if (profile.name) {
-            document.getElementById("navUserName").textContent = `👤 ${profile.name}`;
+        // -------------------------------------------------------
+        // Adapter: normalise backend card fields → display shape
+        // -------------------------------------------------------
+        function normaliseBackendCard(card) {
+            return {
+                id: card.cardId || card.id,
+                name: card.cardName || card.name || "",
+                bank: card.bank || "",
+                cardNumber: card.cardNumberMasked || card.cardNumber || "•••• •••• •••• ????",
+                limit: card.creditLimit || card.limit || 0,
+                outstanding: card.currentBalance || card.outstanding || 0,
+                available: card.availableLimit || Math.max(0, (card.creditLimit || 0) - (card.currentBalance || 0)),
+                utilization: card.utilizationPercentage != null
+                    ? card.utilizationPercentage
+                    : (card.creditLimit > 0 ? ((card.currentBalance / card.creditLimit) * 100) : 0),
+                dueDate: card.dueDate || "—",
+                minimumDue: card.minimumDue || 0,
+                status: card.paymentStatus || card.status || "Active",
+                latePayments: card.latePayments || 0
+            };
         }
 
-        const cards = profile.cards || [];
-        let totalLimit = 0;
-        let totalBalance = 0;
+        // -------------------------------------------------------
+        // Adapter: normalise localStorage mock card → display shape
+        // -------------------------------------------------------
+        function normaliseMockCard(card) {
+            const limit = card.limit || 0;
+            const outstanding = card.outstanding || 0;
+            return {
+                id: card.id,
+                name: card.name || "",
+                bank: card.bank || "",
+                cardNumber: card.cardNumber || "•••• •••• •••• ????",
+                limit,
+                outstanding,
+                available: Math.max(0, limit - outstanding),
+                utilization: limit > 0 ? Number(((outstanding / limit) * 100).toFixed(2)) : 0,
+                dueDate: card.dueDate || "—",
+                minimumDue: 0,
+                status: card.status || "Active",
+                latePayments: 0
+            };
+        }
 
-        cards.forEach(c => {
-            totalLimit += c.limit;
-            totalBalance += c.outstanding;
-        });
+        // -------------------------------------------------------
+        // Render helpers
+        // -------------------------------------------------------
+        function renderSummary(cards) {
+            const totalLimit = cards.reduce((s, c) => s + c.limit, 0);
+            const totalBalance = cards.reduce((s, c) => s + c.outstanding, 0);
+            const utilPct = totalLimit > 0
+                ? Number(((totalBalance / totalLimit) * 100).toFixed(1))
+                : 0;
 
-        const overallUtil = totalLimit > 0 ? ((totalBalance / totalLimit) * 100).toFixed(1) : 0;
-        document.getElementById("totalLimitDisplay").textContent = `₹${totalLimit.toLocaleString('en-IN')}`;
-        document.getElementById("totalBalanceDisplay").textContent = `₹${totalBalance.toLocaleString('en-IN')}`;
-        document.getElementById("totalUtilizationDisplay").textContent = `${overallUtil}%`;
+            document.getElementById("totalLimitDisplay").textContent =
+                `₹${totalLimit.toLocaleString("en-IN")}`;
+            document.getElementById("totalBalanceDisplay").textContent =
+                `₹${totalBalance.toLocaleString("en-IN")}`;
+            document.getElementById("totalUtilizationDisplay").textContent = `${utilPct}%`;
 
-        const container = document.getElementById("cardsListContainer");
-        container.innerHTML = cards.map((card, idx) => {
-            const cardUtil = ((card.outstanding / card.limit) * 100).toFixed(1);
-            const badgeClass = cardUtil > 50 ? 'badge-danger' : (cardUtil > 30 ? 'badge-warning' : 'badge-good');
+            const badge = document.getElementById("utilizationBadge");
+            if (utilPct > 50) {
+                badge.className = "badge badge-danger";
+                badge.textContent = "High — Reduce Urgently";
+            } else if (utilPct > 30) {
+                badge.className = "badge badge-warning";
+                badge.textContent = "Moderate — Target < 30%";
+            } else {
+                badge.className = "badge badge-good";
+                badge.textContent = "Healthy — Below 30%";
+            }
+        }
 
-            return `
-                <div class="card-item">
-                    <div class="card-item-header">
-                        <div>
-                            <div class="item-title">${card.name}</div>
-                            <small style="color: #64748b;">${card.bank} | ${card.cardNumber}</small>
+        function renderCards(cards) {
+            const container = document.getElementById("cardsListContainer");
+
+            if (!cards || cards.length === 0) {
+                container.innerHTML = "<p style='color:#64748b;'>No credit cards found for your profile.</p>";
+                return;
+            }
+
+            container.innerHTML = cards.map(card => {
+                const cardUtil = Number(card.utilization).toFixed(1);
+                const badgeClass = cardUtil > 50 ? "badge-danger"
+                    : cardUtil > 30 ? "badge-warning" : "badge-good";
+                const payTarget = Math.max(0, card.outstanding - (card.limit * 0.3));
+
+                return `
+                    <div class="card-item">
+                        <div class="card-item-header">
+                            <div>
+                                <div class="item-title">${card.name}</div>
+                                <small style="color:#64748b;">${card.bank} | ${card.cardNumber}</small>
+                            </div>
+                            <div>
+                                <span class="badge ${badgeClass}">${cardUtil}% Utilized</span>
+                            </div>
                         </div>
-                        <div>
-                            <span class="badge ${badgeClass}">${cardUtil}% Utilized</span>
+
+                        <div class="item-grid">
+                            <div class="item-field">
+                                Credit Limit
+                                <strong>₹${card.limit.toLocaleString("en-IN")}</strong>
+                            </div>
+                            <div class="item-field">
+                                Outstanding Balance
+                                <strong>₹${card.outstanding.toLocaleString("en-IN")}</strong>
+                            </div>
+                            <div class="item-field">
+                                Available Limit
+                                <strong>₹${card.available.toLocaleString("en-IN")}</strong>
+                            </div>
+                            <div class="item-field">
+                                Payment Due Date
+                                <strong>${card.dueDate}</strong>
+                            </div>
+                        </div>
+
+                        <button class="btn btn-secondary btn-sm" style="margin-top:15px;"
+                            onclick="toggleDetails('details-${card.id}')">
+                            View Details
+                        </button>
+
+                        <div class="details-box" id="details-${card.id}">
+                            <strong>Card Details:</strong><br>
+                            • Status: ${card.status}<br>
+                            • Late Payments: ${card.latePayments}<br>
+                            • Billing Cycle: 1st to 30th of month<br>
+                            • Recommendation: Pay ₹${payTarget.toLocaleString("en-IN")} to bring utilization below 30%.
                         </div>
                     </div>
+                `;
+            }).join("");
+        }
 
-                    <div class="item-grid">
-                        <div class="item-field">
-                            Credit Limit
-                            <strong>₹${card.limit.toLocaleString('en-IN')}</strong>
-                        </div>
-                        <div class="item-field">
-                            Outstanding Balance
-                            <strong>₹${card.outstanding.toLocaleString('en-IN')}</strong>
-                        </div>
-                        <div class="item-field">
-                            Available Limit
-                            <strong>₹${(card.limit - card.outstanding).toLocaleString('en-IN')}</strong>
-                        </div>
-                        <div class="item-field">
-                            Payment Due Date
-                            <strong>${card.dueDate}</strong>
-                        </div>
-                    </div>
+        // -------------------------------------------------------
+        // Main init: try backend → fall back to localStorage
+        // -------------------------------------------------------
+        async function initCardsPage() {
+            const profile = getProfile();
+            const profileId = getProfileId();
 
-                    <button class="btn btn-secondary btn-sm" style="margin-top: 15px;" onclick="toggleDetails('details-${card.id}')">
-                        View Details
-                    </button>
+            if (profile.name) {
+                document.getElementById("navUserName").textContent = `👤 ${profile.name}`;
+            }
 
-                    <div class="details-box" id="details-${card.id}">
-                        <strong>Card Details:</strong><br>
-                        • Status: ${card.status}<br>
-                        • Billing Cycle: 1st to 30th of month<br>
-                        • Recommendation: Pay ₹${Math.max(0, card.outstanding - (card.limit * 0.3)).toLocaleString('en-IN')} to bring utilization below 30%.
-                    </div>
-                </div>
-            `;
-        }).join("");
+            let cards = [];
+            let usingBackend = false;
+
+            // Try backend first
+            const backendRes = await getCardsAPI(profileId);
+            if (backendRes && backendRes.success && Array.isArray(backendRes.cards)) {
+                cards = backendRes.cards.map(normaliseBackendCard);
+                usingBackend = true;
+                document.getElementById("dataSourceBadge").textContent =
+                    `✅ Live data from Firestore (Profile: ${profileId})`;
+            }
+
+            // Fall back to localStorage mock data
+            if (!usingBackend) {
+                const mockCards = profile.cards || [];
+                cards = mockCards.map(normaliseMockCard);
+                document.getElementById("dataSourceBadge").textContent =
+                    "⚠️ Showing saved/mock data — backend unavailable";
+            }
+
+            renderSummary(cards);
+            renderCards(cards);
+        }
 
         window.toggleDetails = function(id) {
             const el = document.getElementById(id);
-            if (el) {
-                el.style.display = el.style.display === "block" ? "none" : "block";
-            }
+            if (el) el.style.display = el.style.display === "block" ? "none" : "block";
         };
+
+        initCardsPage();
     </script>
 </body>
 </html>

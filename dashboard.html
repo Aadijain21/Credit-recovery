@@ -44,7 +44,7 @@
                 <div class="metric-label">Credit Health Score</div>
                 <div class="metric-value" id="dispHealthScore">65 / 100</div>
                 <div class="metric-sub">
-                    <span class="badge badge-good" id="healthBadge">Good</span> (Proprietary Recovery Index)
+                    <span class="badge badge-good" id="healthBadge">Good</span> (Recovery Index)
                 </div>
             </div>
 
@@ -52,7 +52,7 @@
                 <div class="metric-label">Overall Credit Utilization</div>
                 <div class="metric-value" id="dispUtilization">54.2%</div>
                 <div class="metric-sub">
-                    <span class="badge badge-danger">High (&gt;30% Recommended)</span>
+                    <span class="badge badge-danger" id="utilizationBadge">High (&gt;30% Recommended)</span>
                 </div>
             </div>
         </div>
@@ -62,19 +62,31 @@
             <div class="metric-card">
                 <div class="metric-label">Credit Cards</div>
                 <div class="metric-value" id="dispCardCount">2</div>
-                <div class="metric-sub">Total Limit: ₹1,20,000</div>
+                <div class="metric-sub" id="dispCardLimitSub">Total Limit: ₹1,20,000</div>
             </div>
 
             <div class="metric-card">
                 <div class="metric-label">Active Loans</div>
                 <div class="metric-value" id="dispLoanCount">2</div>
-                <div class="metric-sub">Total Debt: ₹1,77,000</div>
+                <div class="metric-sub">Open facilities</div>
             </div>
 
             <div class="metric-card">
                 <div class="metric-label">Late Payments</div>
                 <div class="metric-value" id="dispLatePayments">1</div>
-                <div class="metric-sub">Needs Attention</div>
+                <div class="metric-sub" id="dispLatePaymentsSub">Needs Attention</div>
+            </div>
+        </div>
+
+        <!-- Recovery Plan Status Card -->
+        <div class="metric-card" id="recoveryStatusCard" style="margin-bottom: 25px;">
+            <div class="metric-label">Recovery Action Plan & Progress</div>
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 5px;">
+                <div id="progressText">Checking latest recovery progress...</div>
+                <span class="badge badge-good" id="dashboardProgressBadge">0% Complete</span>
+            </div>
+            <div class="progress-bar-container" style="margin-top: 12px;">
+                <div class="progress-bar-fill" id="dashboardProgressBar" style="width: 0%;"></div>
             </div>
         </div>
 
@@ -108,26 +120,214 @@
     </main>
 
     <script type="module">
-        import { getProfile } from "./creditData.js";
+        import {
+            getProfile, getProfileId,
+            getAssessmentAPI, getProgressAPI,
+            getCardsAPI, getLoansAPI
+        } from "./creditData.js";
 
-        const profile = getProfile();
+        async function initDashboard() {
+            const profile = getProfile();
+            const profileId = getProfileId();
 
-        // Update welcome message
-        const welcomeGreeting = document.getElementById("welcomeGreeting");
-        const navUserName = document.getElementById("navUserName");
-        if (profile.name) {
-            welcomeGreeting.textContent = `Welcome back, ${profile.name}!`;
-            navUserName.textContent = `👤 ${profile.name}`;
+            // Update welcome message
+            const welcomeGreeting = document.getElementById("welcomeGreeting");
+            const navUserName = document.getElementById("navUserName");
+            if (profile.name) {
+                welcomeGreeting.textContent = `Welcome back, ${profile.name}!`;
+                navUserName.textContent = `👤 ${profile.name}`;
+            }
+
+            // ── Defaults from localStorage ──────────────────────────────
+            let cibil = profile.creditScore || 680;
+            let creditLimit = profile.creditLimit || 120000;
+            let outstanding = profile.outstandingBalance || 65000;
+            let latePayments = profile.latePayments !== undefined ? profile.latePayments : 1;
+            let activeLoans = profile.activeLoans !== undefined ? profile.activeLoans : 2;
+            let healthScore = profile.latestAssessment?.healthScore || 65;
+            let healthStatus = profile.latestAssessment?.status || "Good";
+            let cardCount = profile.cards ? profile.cards.length : 2;
+            let totalLoanEMI = 0;
+
+            // ── Run all backend fetches in parallel ─────────────────────
+            const [assessmentRes, cardsRes, loansRes] = await Promise.all([
+                profile.currentAssessmentId && !profile.currentAssessmentId.startsWith("local_")
+                    ? getAssessmentAPI(profile.currentAssessmentId)
+                    : Promise.resolve(null),
+                getCardsAPI(profileId),
+                getLoansAPI(profileId)
+            ]);
+
+            // ── Assessment data ─────────────────────────────────────────
+            if (assessmentRes?.success && assessmentRes.assessment) {
+                const a = assessmentRes.assessment;
+                if (a.creditScore) cibil = a.creditScore;
+                if (a.latePayments !== undefined) latePayments = a.latePayments;
+                if (a.activeLoans !== undefined) activeLoans = a.activeLoans;
+                if (a.analysis?.score) healthScore = a.analysis.score;
+                if (a.analysis?.status) healthStatus = a.analysis.status;
+            }
+
+            // ── Live card data ──────────────────────────────────────────
+            if (cardsRes?.success && Array.isArray(cardsRes.cards) && cardsRes.cards.length > 0) {
+                cardCount = cardsRes.count;
+                creditLimit = cardsRes.summary.totalLimit || creditLimit;
+                outstanding = cardsRes.summary.totalBalance || outstanding;
+                // Accumulate late payments across all cards
+                latePayments = Math.max(latePayments, cardsRes.summary.totalLatePayments || 0);
+            }
+
+            // ── Live loan data ──────────────────────────────────────────
+            if (loansRes?.success && Array.isArray(loansRes.loans) && loansRes.loans.length > 0) {
+                activeLoans = loansRes.count;
+                totalLoanEMI = loansRes.summary.totalEMI || 0;
+                latePayments = Math.max(latePayments, loansRes.summary.totalLatePayments || 0);
+            }
+
+            // ── Computed derived values ─────────────────────────────────
+            const util = creditLimit > 0 ? ((outstanding / creditLimit) * 100).toFixed(1) : 0;
+
+            // ── Render to DOM ───────────────────────────────────────────
+            document.getElementById("dispCibilScore").textContent = cibil;
+            document.getElementById("dispHealthScore").textContent = `${healthScore} / 100`;
+            document.getElementById("dispUtilization").textContent = `${util}%`;
+            document.getElementById("dispCardCount").textContent = cardCount;
+            document.getElementById("dispCardLimitSub").textContent =
+                `Total Limit: ₹${Number(creditLimit).toLocaleString("en-IN")}`;
+            document.getElementById("dispLoanCount").textContent = activeLoans;
+            document.getElementById("dispLatePayments").textContent = latePayments;
+
+            const lateEl = document.getElementById("dispLatePaymentsSub");
+            if (lateEl) {
+                lateEl.textContent = latePayments > 0 ? "Needs Attention" : "All On Time";
+            }
+
+            // Health badge
+            const healthBadge = document.getElementById("healthBadge");
+            if (healthBadge) {
+                healthBadge.textContent = healthStatus;
+                healthBadge.className = `badge ${
+                    healthScore >= 80 ? "badge-good" :
+                    healthScore >= 50 ? "badge-warning" : "badge-danger"
+                }`;
+            }
+
+            // Utilization badge
+            const utilBadge = document.getElementById("utilizationBadge");
+            if (utilBadge) {
+                if (util > 50) {
+                    utilBadge.textContent = "High — Reduce Urgently";
+                    utilBadge.className = "badge badge-danger";
+                } else if (util > 30) {
+                    utilBadge.textContent = "Moderate — Target < 30%";
+                    utilBadge.className = "badge badge-warning";
+                } else {
+                    utilBadge.textContent = "Healthy — Below 30%";
+                    utilBadge.className = "badge badge-good";
+                }
+            }
+
+            // ── Recovery Progress via backend ───────────────────────────
+            const progressText = document.getElementById("progressText");
+            const dashboardProgressBadge = document.getElementById("dashboardProgressBadge");
+            const dashboardProgressBar = document.getElementById("dashboardProgressBar");
+
+            if (profile.currentAssessmentId && !profile.currentAssessmentId.startsWith("local_")) {
+                const progressRes = await getProgressAPI(profile.currentAssessmentId);
+                if (progressRes?.success) {
+                    const pct = progressRes.progressPercentage || 0;
+                    progressText.textContent =
+                        `${progressRes.completedTasks} of ${progressRes.totalTasks} roadmap tasks completed`;
+                    dashboardProgressBadge.textContent = `${pct}% Complete`;
+                    dashboardProgressBar.style.width = `${pct}%`;
+                } else {
+                    progressText.textContent = "Roadmap generated. Complete tasks in CIBIL & Recovery.";
+                    dashboardProgressBadge.textContent = "Active";
+                }
+            } else {
+                progressText.textContent = "Take an assessment in CIBIL & Recovery to start your recovery plan.";
+                dashboardProgressBadge.textContent = "Ready to start";
+            }
         }
 
-        // Compute utilization
-        const utilization = ((profile.outstandingBalance / profile.creditLimit) * 100).toFixed(1);
+        initDashboard();
+    </script>
+</body>
+</html>
 
-        document.getElementById("dispCibilScore").textContent = profile.creditScore || 680;
-        document.getElementById("dispUtilization").textContent = `${utilization}%`;
-        document.getElementById("dispCardCount").textContent = profile.cards ? profile.cards.length : 2;
-        document.getElementById("dispLoanCount").textContent = profile.activeLoans || 2;
-        document.getElementById("dispLatePayments").textContent = profile.latePayments || 0;
+
+            // Update welcome message
+            const welcomeGreeting = document.getElementById("welcomeGreeting");
+            const navUserName = document.getElementById("navUserName");
+            if (profile.name) {
+                welcomeGreeting.textContent = `Welcome back, ${profile.name}!`;
+                navUserName.textContent = `👤 ${profile.name}`;
+            }
+
+            // Defaults from profile
+            let cibil = profile.creditScore || 680;
+            let creditLimit = profile.creditLimit || 120000;
+            let outstanding = profile.outstandingBalance || 65000;
+            let latePayments = profile.latePayments !== undefined ? profile.latePayments : 1;
+            let activeLoans = profile.activeLoans !== undefined ? profile.activeLoans : 2;
+            let healthScore = profile.latestAssessment?.healthScore || 65;
+            let healthStatus = profile.latestAssessment?.status || "Good";
+
+            // If an assessment ID is stored, fetch live from backend GET /api/assessments/:id
+            if (profile.currentAssessmentId && !profile.currentAssessmentId.startsWith("local_")) {
+                const assessmentRes = await getAssessmentAPI(profile.currentAssessmentId);
+                if (assessmentRes && assessmentRes.success && assessmentRes.assessment) {
+                    const a = assessmentRes.assessment;
+                    if (a.creditScore) cibil = a.creditScore;
+                    if (a.creditLimit) creditLimit = a.creditLimit;
+                    if (a.outstandingBalance) outstanding = a.outstandingBalance;
+                    if (a.latePayments !== undefined) latePayments = a.latePayments;
+                    if (a.activeLoans !== undefined) activeLoans = a.activeLoans;
+                    if (a.analysis?.score) healthScore = a.analysis.score;
+                    if (a.analysis?.status) healthStatus = a.analysis.status;
+                }
+            }
+
+            const util = creditLimit > 0 ? ((outstanding / creditLimit) * 100).toFixed(1) : 0;
+
+            document.getElementById("dispCibilScore").textContent = cibil;
+            document.getElementById("dispHealthScore").textContent = `${healthScore} / 100`;
+            document.getElementById("dispUtilization").textContent = `${util}%`;
+            document.getElementById("dispCardCount").textContent = profile.cards ? profile.cards.length : 2;
+            document.getElementById("dispCardLimitSub").textContent = `Total Limit: ₹${Number(creditLimit).toLocaleString('en-IN')}`;
+            document.getElementById("dispLoanCount").textContent = activeLoans;
+            document.getElementById("dispLatePayments").textContent = latePayments;
+
+            // Badges
+            const healthBadge = document.getElementById("healthBadge");
+            if (healthBadge) {
+                healthBadge.textContent = healthStatus;
+                healthBadge.className = `badge ${healthScore >= 80 ? 'badge-good' : (healthScore >= 50 ? 'badge-warning' : 'badge-danger')}`;
+            }
+
+            // Fetch live progress from backend GET /api/progress/:assessmentId
+            const progressText = document.getElementById("progressText");
+            const dashboardProgressBadge = document.getElementById("dashboardProgressBadge");
+            const dashboardProgressBar = document.getElementById("dashboardProgressBar");
+
+            if (profile.currentAssessmentId && !profile.currentAssessmentId.startsWith("local_")) {
+                const progressRes = await getProgressAPI(profile.currentAssessmentId);
+                if (progressRes && progressRes.success) {
+                    const pct = progressRes.progressPercentage || 0;
+                    progressText.textContent = `${progressRes.completedTasks} of ${progressRes.totalTasks} roadmap tasks completed`;
+                    dashboardProgressBadge.textContent = `${pct}% Complete`;
+                    dashboardProgressBar.style.width = `${pct}%`;
+                } else {
+                    progressText.textContent = "Roadmap generated. Complete tasks in CIBIL & Recovery to raise your score.";
+                    dashboardProgressBadge.textContent = "Active";
+                }
+            } else {
+                progressText.textContent = "Take an assessment in CIBIL & Recovery to start your 3-month recovery plan.";
+                dashboardProgressBadge.textContent = "Ready to start";
+            }
+        }
+
+        initDashboard();
     </script>
 </body>
 </html>

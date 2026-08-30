@@ -3,16 +3,16 @@ const db = require("../config/firebase");
 
 const router = express.Router();
 
-// Create a recovery task
+// Create a recovery task  —  POST /api/tasks
 router.post("/", async (req, res) => {
+    if (!db) {
+        return res.status(503).json({
+            success: false,
+            error: "Database not available. Add serviceAccountKey.json to backend/ and restart."
+        });
+    }
     try {
-        const {
-            assessmentId,
-            title,
-            description,
-            category,
-            dueDate
-        } = req.body;
+        const { assessmentId, title, description, category, dueDate } = req.body;
 
         if (!assessmentId || !title) {
             return res.status(400).json({
@@ -31,59 +31,46 @@ router.post("/", async (req, res) => {
             createdAt: new Date()
         };
 
-        const docRef = await db
-            .collection("tasks")
-            .add(task);
+        const docRef = await db.collection("tasks").add(task);
 
-        res.status(201).json({
-            success: true,
-            taskId: docRef.id,
-            task
-        });
-
+        res.status(201).json({ success: true, taskId: docRef.id, task });
     } catch (error) {
         console.error(error);
-
-        res.status(500).json({
-            success: false,
-            error: "Failed to create task"
-        });
+        res.status(500).json({ success: false, error: "Failed to create task" });
     }
 });
 
-
-// Get all tasks for an assessment
+// Get all tasks for an assessment  —  GET /api/tasks/:assessmentId
 router.get("/:assessmentId", async (req, res) => {
+    if (!db) {
+        return res.status(503).json({
+            success: false,
+            error: "Database not available. Add serviceAccountKey.json to backend/ and restart."
+        });
+    }
     try {
         const snapshot = await db
             .collection("tasks")
             .where("assessmentId", "==", req.params.assessmentId)
             .get();
 
-        const tasks = snapshot.docs.map(doc => ({
-            taskId: doc.id,
-            ...doc.data()
-        }));
+        const tasks = snapshot.docs.map(doc => ({ taskId: doc.id, ...doc.data() }));
 
-        res.json({
-            success: true,
-            count: tasks.length,
-            tasks
-        });
-
+        res.json({ success: true, count: tasks.length, tasks });
     } catch (error) {
         console.error(error);
-
-        res.status(500).json({
-            success: false,
-            error: "Failed to fetch tasks"
-        });
+        res.status(500).json({ success: false, error: "Failed to fetch tasks" });
     }
 });
 
-
-// Mark task as completed/uncompleted
+// Mark task as completed/uncompleted  —  PATCH /api/tasks/:taskId
 router.patch("/:taskId", async (req, res) => {
+    if (!db) {
+        return res.status(503).json({
+            success: false,
+            error: "Database not available. Add serviceAccountKey.json to backend/ and restart."
+        });
+    }
     try {
         const { completed } = req.body;
 
@@ -94,37 +81,22 @@ router.patch("/:taskId", async (req, res) => {
             });
         }
 
-        const taskRef = db
-            .collection("tasks")
-            .doc(req.params.taskId);
-
+        const taskRef = db.collection("tasks").doc(req.params.taskId);
         const doc = await taskRef.get();
 
         if (!doc.exists) {
-            return res.status(404).json({
-                success: false,
-                error: "Task not found"
-            });
+            return res.status(404).json({ success: false, error: "Task not found" });
         }
 
-        await taskRef.update({
-            completed
-        });
+        await taskRef.update({ completed });
 
         res.json({
             success: true,
-            message: completed
-                ? "Task completed"
-                : "Task marked incomplete"
+            message: completed ? "Task completed" : "Task marked incomplete"
         });
-
     } catch (error) {
         console.error(error);
-
-        res.status(500).json({
-            success: false,
-            error: "Failed to update task"
-        });
+        res.status(500).json({ success: false, error: "Failed to update task" });
     }
 });
 
